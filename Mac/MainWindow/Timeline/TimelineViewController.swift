@@ -233,6 +233,14 @@ final class TimelineViewController: NSViewController, UndoableCommandRunner, Unr
 	}
 	// The nib’s single column, kept so standard layout can put it back.
 	var standardColumn: NSTableColumn?
+	private var standardColumnMaximumWidth: CGFloat = 0
+	var fillsAvailableWidth = AppDefaults.windowLayout == .compact {
+		didSet {
+			if fillsAvailableWidth != oldValue {
+				updateStandardColumnWidth()
+			}
+		}
+	}
 	// Set while columns are added and autosaved state is restored, which fires sortDescriptorsDidChange.
 	var isConfiguringTableColumns = false
 	private var textSize = AppDefaults.timelineTextSize {
@@ -326,7 +334,9 @@ final class TimelineViewController: NSViewController, UndoableCommandRunner, Unr
 		tableView.gridColor = .separatorColor
 
 		standardColumn = tableView.tableColumns.first
+		standardColumnMaximumWidth = standardColumn?.maxWidth ?? 0
 		configureTableView(for: layout)
+		updateStandardColumnWidth()
 		updateGridStyle()
 		updateShowIcons()
 
@@ -1493,6 +1503,20 @@ extension TimelineViewController: NSTableViewDelegate {
 // MARK: - Private
 
 private extension TimelineViewController {
+
+	func updateStandardColumnWidth() {
+		guard let standardColumn else {
+			return
+		}
+		let maximumWidth = fillsAvailableWidth ? CGFloat.greatestFiniteMagnitude : standardColumnMaximumWidth
+		guard standardColumn.maxWidth != maximumWidth else {
+			return
+		}
+		standardColumn.maxWidth = maximumWidth
+		if layout == .standard {
+			tableView.sizeLastColumnToFit()
+		}
+	}
 
 	/// The table doesn’t shrink by itself when the pane narrows after leaving column layout.
 	func fitTableViewToVisibleWidthInStandardLayout() {

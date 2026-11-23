@@ -36,6 +36,7 @@ extension AppDefaults.Key {
 	static let legacyWindowState = "windowState"
 	static let secureWindowState = "secureWindowState"
 	static let useColumnLayout = "useColumnLayout"
+	static let useCompactLayout = "useCompactLayout"
 	static let timelineShowSeparators = "timelineShowSeparators"
 	static let legacyTimelineShowSeparators = "CorreiaSeparators" // Formerly a hidden pref
 	static let showStatusBar = "showStatusBar"
@@ -191,6 +192,23 @@ extension AppDefaults {
 		UserDefaults.standard.bool(forKey: Key.timelineGroupByFeed)
 	}
 
+	static var windowLayout: WindowLayout {
+		if useCompactLayout {
+			return .compact
+		}
+		return useColumnLayout ? .column : .standard
+	}
+
+	/// Compact Mode shows the timeline and article one at a time in the pane beside the sidebar. Applies to all windows.
+	static var useCompactLayout: Bool {
+		get {
+			UserDefaults.standard.bool(forKey: Key.useCompactLayout)
+		}
+		set {
+			UserDefaults.standard.set(newValue, forKey: Key.useCompactLayout)
+		}
+	}
+
 	/// Column layout: multi-column timeline table with the article view below it, like Mail’s View > Use Column Layout. Applies to all windows.
 	static var useColumnLayout: Bool {
 		get {
@@ -290,6 +308,7 @@ extension AppDefaults {
 
 		let platformDefaults: [String: Any] = [
 			Key.useColumnLayout: false,
+			Key.useCompactLayout: false,
 			Key.showStatusBar: Self.showStatusBarDefault,
 			Key.showStatusBarThemeMenu: true,
 			Key.statusBarCountMode: StatusBarCountMode.lastRefresh.rawValue,

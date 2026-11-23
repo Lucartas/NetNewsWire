@@ -18,6 +18,6 @@ enum TimelineLayout {
 extension AppDefaults {
 
 	static var timelineLayout: TimelineLayout {
-		useColumnLayout ? .column : .standard
+		windowLayout.timelineLayout
 	}
 }

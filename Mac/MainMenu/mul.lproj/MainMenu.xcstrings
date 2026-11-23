@@ -2071,6 +2071,18 @@
         }
       }
     },
+    "scL-ay-0ut.title" : {
+      "comment" : "Class = \"NSMenuItem\"; title = \"Use Compact Mode\"; ObjectID = \"scL-ay-0ut\";",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use Compact Mode"
+          }
+        }
+      }
+    },
     "ucL-ay-0ut.title" : {
       "comment" : "Class = \"NSMenuItem\"; title = \"Use Column Layout\"; ObjectID = \"ucL-ay-0ut\";",
       "extractionState" : "extracted_with_value",

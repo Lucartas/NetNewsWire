@@ -116,7 +116,11 @@ final class TimelineContainerViewController: NSViewController {
 	}
 
 	private func userDefaultsDidChange() {
-		layout = AppDefaults.timelineLayout
+		let windowLayout = AppDefaults.windowLayout
+		layout = windowLayout.timelineLayout
+		let fillsAvailableWidth = windowLayout == .compact
+		regularTimelineViewController.fillsAvailableWidth = fillsAvailableWidth
+		searchTimelineViewController.fillsAvailableWidth = fillsAvailableWidth
 	}
 
 	// MARK: - API

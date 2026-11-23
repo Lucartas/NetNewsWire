@@ -19,6 +19,7 @@
                 <outlet property="showStatusBarMenuItem" destination="stB-ar-mI1" id="stB-ar-oU1"/>
                 <outlet property="showStatusBarThemeMenuMenuItem" destination="stT-hm-mI1" id="stT-hm-oU1"/>
                 <outlet property="useColumnLayoutMenuItem" destination="ucL-ay-0ut" id="ucL-ou-tl1"/>
+                <outlet property="useCompactLayoutMenuItem" destination="scL-ay-0ut" id="scL-ou-tl1"/>
             </connections>
         </customObject>
         <menu title="Main Menu" systemMenu="main" id="AYu-sK-qS6">
@@ -437,6 +438,12 @@
                                 <modifierMask key="keyEquivalentModifierMask"/>
                                 <connections>
                                     <action selector="toggleColumnLayout:" target="Voe-Tx-rLC" id="ucL-ac-t0n"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Use Compact Mode" id="scL-ay-0ut">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="toggleCompactLayout:" target="Voe-Tx-rLC" id="scL-ac-t0n"/>
                                 </connections>
                             </menuItem>
                             <menuItem isSeparatorItem="YES" id="3ut-x3-H83"/>

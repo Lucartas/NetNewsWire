@@ -53,6 +53,7 @@ let appName = "NetNewsWire"
 
 	@IBOutlet var debugMenuItem: NSMenuItem!
 	@IBOutlet var useColumnLayoutMenuItem: NSMenuItem?
+	@IBOutlet var useCompactLayoutMenuItem: NSMenuItem?
 	@IBOutlet var showStatusBarMenuItem: NSMenuItem?
 	@IBOutlet var showStatusBarThemeMenuMenuItem: NSMenuItem?
 	@IBOutlet var checkForUpdatesMenuItem: NSMenuItem!
@@ -196,7 +197,7 @@ let appName = "NetNewsWire"
 			DefaultFeedsImporter.importDefaultFeeds(account: localAccount)
 		}
 
-		updateColumnLayoutMenuItem()
+		updateLayoutMenuItems()
 		updateStatusBarMenuItems()
 
 		if mainWindowController == nil {
@@ -383,7 +384,7 @@ let appName = "NetNewsWire"
 	}
 
 	func userDefaultsDidChange() {
-		updateColumnLayoutMenuItem()
+		updateLayoutMenuItems()
 		updateStatusBarMenuItems()
 
 		if lastRefreshInterval != AppDefaults.refreshInterval {
@@ -760,7 +761,12 @@ let appName = "NetNewsWire"
 	}
 
 	@IBAction func toggleColumnLayout(_ sender: Any?) {
-		AppDefaults.useColumnLayout.toggle()
+		AppDefaults.useColumnLayout = AppDefaults.windowLayout != .column
+		AppDefaults.useCompactLayout = false
+	}
+
+	@IBAction func toggleCompactLayout(_ sender: Any?) {
+		AppDefaults.useCompactLayout.toggle()
 	}
 
 	@IBAction func toggleStatusBar(_ sender: Any?) {
@@ -886,8 +892,10 @@ extension AppDelegate {
 		dinosaurWindowController?.saveState()
 	}
 
-	@MainActor func updateColumnLayoutMenuItem() {
-		useColumnLayoutMenuItem?.state = AppDefaults.useColumnLayout ? .on : .off
+	@MainActor func updateLayoutMenuItems() {
+		let layout = AppDefaults.windowLayout
+		useColumnLayoutMenuItem?.state = layout == .column ? .on : .off
+		useCompactLayoutMenuItem?.state = layout == .compact ? .on : .off
 	}
 
 	@MainActor func updateStatusBarMenuItems() {
