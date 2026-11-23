@@ -579,7 +579,7 @@ final class MainWindowController: NSWindowController, NSUserInterfaceValidations
 
 	@IBAction func navigateToTimeline(_ sender: Any?) {
 		if usesCompactLayout {
-			showSingleColumnPane(.timeline)
+			showSingleColumnPane(.timeline, animated: true)
 		} else {
 			currentTimelineViewController?.focus()
 		}
@@ -591,14 +591,14 @@ final class MainWindowController: NSWindowController, NSUserInterfaceValidations
 
 	@IBAction func navigateToDetail(_ sender: Any?) {
 		if usesCompactLayout {
-			showSingleColumnPane(.article)
+			showSingleColumnPane(.article, animated: true)
 		} else {
 			detailViewController?.focus()
 		}
 	}
 
 	func toggleCompactModeArticle() {
-		showSingleColumnPane(singleColumnPane == .article ? .timeline : .article)
+		showSingleColumnPane(singleColumnPane == .article ? .timeline : .article, animated: true)
 	}
 
 	@IBAction func goToPreviousSubscription(_ sender: Any?) {
@@ -1246,7 +1246,7 @@ private extension MainWindowController {
 		oneSelectedArticle == nil ? .timeline : .article
 	}
 
-	func showSingleColumnPane(_ pane: SingleColumnPane, focus: Bool = true) {
+	func showSingleColumnPane(_ pane: SingleColumnPane, focus: Bool = true, animated: Bool = false) {
 		guard let singleColumnViewController else {
 			return
 		}
@@ -1268,7 +1268,7 @@ private extension MainWindowController {
 			mouseoverLink = nil
 		}
 		singleColumnPane = pane
-		singleColumnViewController.show(controller, showsBackButton: pane == .article)
+		singleColumnViewController.show(controller, showsBackButton: pane == .article, animated: animated)
 		window?.recalculateKeyViewLoop()
 		if focus {
 			focusSingleColumnPane()

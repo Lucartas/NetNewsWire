@@ -4,13 +4,36 @@
 //
 
 import AppKit
+import QuartzCore
 
 /// Hosts the timeline or reader in the content pane next to the sidebar.
 final class SingleColumnViewController: NSViewController {
 
+	private struct Pane {
+		let id = UUID()
+		let controller: NSViewController
+		let host: NSView
+		let showsBackButton: Bool
+		let horizontalPosition: NSLayoutConstraint
+		let constraints: [NSLayoutConstraint]
+	}
+
+	private final class PaneHost: NSView {
+		override func hitTest(_ point: NSPoint) -> NSView? {
+			let hit = super.hitTest(point)
+			return hit === self ? nil : hit
+		}
+	}
+
+	private static let slideAnimationKey = "compactModeSlide"
+
 	private let backButton: NSButton
-	private var pane: NSViewController?
-	private var paneConstraints = [NSLayoutConstraint]()
+	private let timelineHost = PaneHost()
+	private let articleHost = PaneHost()
+	private lazy var timelinePosition = timelineHost.leftAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leftAnchor)
+	private lazy var articlePosition = articleHost.leftAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leftAnchor)
+	private var pane: Pane?
+	private var outgoingPane: Pane?
 
 	init(backTarget: AnyObject, backAction: Selector) {
 		backButton = NSButton(title: "", target: backTarget, action: backAction)
@@ -23,50 +46,131 @@ final class SingleColumnViewController: NSViewController {
 
 	override func loadView() {
 		view = NSView()
+		view.wantsLayer = true
+		view.clipsToBounds = true
+		for (host, position) in [(timelineHost, timelinePosition), (articleHost, articlePosition)] {
+			host.translatesAutoresizingMaskIntoConstraints = false
+			view.addSubview(host)
+			NSLayoutConstraint.activate([
+				position,
+				host.widthAnchor.constraint(equalTo: view.safeAreaLayoutGuide.widthAnchor),
+				host.topAnchor.constraint(equalTo: view.topAnchor),
+				host.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+			])
+		}
 		backButton.image = NSImage(systemSymbolName: "chevron.left", accessibilityDescription: nil)
 		backButton.imagePosition = .imageOnly
 		backButton.bezelStyle = .toolbar
 		backButton.toolTip = NSLocalizedString("Back to Articles", comment: "Back button in Compact Mode")
 		backButton.setAccessibilityLabel(NSLocalizedString("Back to Articles", comment: "Back button in Compact Mode"))
 		backButton.translatesAutoresizingMaskIntoConstraints = false
-		backButton.isHidden = true
-		view.addSubview(backButton)
-		NSLayoutConstraint.activate([
-			backButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
-			backButton.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 12)
-		])
 	}
 
-	func show(_ controller: NSViewController, showsBackButton: Bool) {
-		guard pane !== controller else {
+	func show(_ controller: NSViewController, showsBackButton: Bool, animated: Bool) {
+		guard pane?.controller !== controller else {
 			return
 		}
-		removePane()
-		let container = view
-		backButton.isHidden = !showsBackButton
 
-		addChild(controller)
-		let paneView = controller.view
-		paneView.translatesAutoresizingMaskIntoConstraints = false
-		container.addSubview(paneView, positioned: .below, relativeTo: backButton)
+		var interruptedOffset: CGFloat = 0
+		if outgoingPane != nil, let activeHost = pane?.host {
+			if let presentation = activeHost.layer?.presentation() {
+				interruptedOffset = presentation.frame.minX - activeHost.frame.minX
+			}
+			finishTransition()
+			activeHost.layer?.removeAnimation(forKey: Self.slideAnimationKey)
+		}
 
-		let safeArea = container.safeAreaLayoutGuide
-		let topAnchor = showsBackButton ? backButton.bottomAnchor : safeArea.topAnchor
-		paneConstraints = [
-			paneView.topAnchor.constraint(equalTo: topAnchor, constant: showsBackButton ? 8 : 0),
-			paneView.leadingAnchor.constraint(equalTo: safeArea.leadingAnchor),
-			paneView.trailingAnchor.constraint(equalTo: safeArea.trailingAnchor),
-			paneView.bottomAnchor.constraint(equalTo: container.bottomAnchor)
-		]
-		NSLayoutConstraint.activate(paneConstraints)
-		pane = controller
+		let width = view.safeAreaRect.width
+		guard animated, let outgoing = pane, view.window?.isVisible == true, width > 0,
+			  !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
+			removePane()
+			pane = installPane(controller, showsBackButton: showsBackButton)
+			return
+		}
+
+		let forwardOffset = view.userInterfaceLayoutDirection == .rightToLeft ? -width : width
+		let offset = showsBackButton ? forwardOffset : -forwardOffset
+		let incoming = installPane(controller, showsBackButton: showsBackButton)
+		pane = incoming
+		outgoingPane = outgoing
+
+		let transitionID = outgoing.id
+		CATransaction.begin()
+		CATransaction.setDisableActions(true)
+		CATransaction.setCompletionBlock { [weak self] in
+			Task { @MainActor in
+				guard let self, self.outgoingPane?.id == transitionID else {
+					return
+				}
+				self.finishTransition()
+			}
+		}
+		outgoing.horizontalPosition.constant = -offset
+		view.layoutSubtreeIfNeeded()
+
+		let slide = CABasicAnimation(keyPath: "transform.translation.x")
+		slide.duration = 0.24
+		slide.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+		slide.isAdditive = true
+		slide.fromValue = offset + interruptedOffset
+		slide.toValue = 0
+		outgoing.host.layer?.add(slide, forKey: Self.slideAnimationKey)
+		incoming.host.layer?.add(slide, forKey: Self.slideAnimationKey)
+		CATransaction.commit()
 	}
 
 	func removePane() {
-		NSLayoutConstraint.deactivate(paneConstraints)
-		paneConstraints.removeAll()
-		pane?.view.removeFromSuperview()
-		pane?.removeFromParent()
-		pane = nil
+		finishTransition()
+		if let pane {
+			detach(pane)
+			self.pane = nil
+		}
+	}
+
+	private func installPane(_ controller: NSViewController, showsBackButton: Bool) -> Pane {
+		addChild(controller)
+		let host = showsBackButton ? articleHost : timelineHost
+		let paneView = controller.view
+		paneView.translatesAutoresizingMaskIntoConstraints = false
+		host.addSubview(paneView)
+
+		let safeArea = view.safeAreaLayoutGuide
+		let topAnchor = showsBackButton ? backButton.bottomAnchor : safeArea.topAnchor
+		var constraints = [
+			paneView.topAnchor.constraint(equalTo: topAnchor, constant: showsBackButton ? 8 : 0),
+			paneView.leadingAnchor.constraint(equalTo: host.leadingAnchor),
+			paneView.trailingAnchor.constraint(equalTo: host.trailingAnchor),
+			paneView.bottomAnchor.constraint(equalTo: host.bottomAnchor)
+		]
+		if showsBackButton {
+			host.addSubview(backButton)
+			constraints.append(contentsOf: [
+				backButton.topAnchor.constraint(equalTo: safeArea.topAnchor, constant: 8),
+				backButton.leadingAnchor.constraint(equalTo: paneView.leadingAnchor, constant: 12)
+			])
+		}
+		NSLayoutConstraint.activate(constraints)
+		let horizontalPosition = showsBackButton ? articlePosition : timelinePosition
+		return Pane(controller: controller, host: host, showsBackButton: showsBackButton, horizontalPosition: horizontalPosition, constraints: constraints)
+	}
+
+	private func finishTransition() {
+		guard let outgoingPane else {
+			return
+		}
+		self.outgoingPane = nil
+		detach(outgoingPane)
+		view.window?.recalculateKeyViewLoop()
+	}
+
+	private func detach(_ pane: Pane) {
+		pane.host.layer?.removeAnimation(forKey: Self.slideAnimationKey)
+		pane.horizontalPosition.constant = 0
+		NSLayoutConstraint.deactivate(pane.constraints)
+		if pane.showsBackButton {
+			backButton.removeFromSuperview()
+		}
+		pane.controller.view.removeFromSuperview()
+		pane.controller.removeFromParent()
 	}
 }
