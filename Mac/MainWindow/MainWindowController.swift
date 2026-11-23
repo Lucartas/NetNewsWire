@@ -160,15 +160,23 @@ final class MainWindowController: NSWindowController, NSUserInterfaceValidations
 	func handle(_ response: UNNotificationResponse) {
 		let userInfo = response.notification.request.content.userInfo
 		guard let articlePathUserInfo = userInfo[UserInfoKey.articlePath] as? [AnyHashable: Any] else { return }
-		sidebarViewController?.deepLinkRevealAndSelect(for: articlePathUserInfo)
-		currentTimelineViewController?.goToDeepLink(for: articlePathUserInfo)
+		openDeepLinkedArticle(articlePathUserInfo)
 	}
 
 	func handle(_ activity: NSUserActivity) {
 		guard let userInfo = activity.userInfo else { return }
 		guard let articlePathUserInfo = userInfo[UserInfoKey.articlePath] as? [AnyHashable: Any] else { return }
+		openDeepLinkedArticle(articlePathUserInfo)
+	}
+
+	private func openDeepLinkedArticle(_ articlePathUserInfo: [AnyHashable: Any]) {
+		if usesCompactLayout && timelineSourceMode == .search {
+			forceSearchToEnd()
+		}
 		sidebarViewController?.deepLinkRevealAndSelect(for: articlePathUserInfo)
-		currentTimelineViewController?.goToDeepLink(for: articlePathUserInfo)
+		if currentTimelineViewController?.goToDeepLink(for: articlePathUserInfo) == true {
+			showSingleColumnPane(.article)
+		}
 	}
 
 	func saveStateToUserDefaults() {
@@ -364,6 +372,10 @@ final class MainWindowController: NSWindowController, NSUserInterfaceValidations
 	// MARK: - Actions
 
 	@IBAction func scrollOrGoToNextUnread(_ sender: Any?) {
+		if usesCompactLayout && singleColumnPane != .article {
+			nextUnread(sender)
+			return
+		}
 		guard let detailViewController else {
 			return
 		}
@@ -379,6 +391,9 @@ final class MainWindowController: NSWindowController, NSUserInterfaceValidations
 	}
 
 	@IBAction func scrollUp(_ sender: Any?) {
+		guard !usesCompactLayout || singleColumnPane == .article else {
+			return
+		}
 		guard let detailViewController else {
 			return
 		}
@@ -451,6 +466,9 @@ final class MainWindowController: NSWindowController, NSUserInterfaceValidations
 			return
 		}
 
+		// Changing feeds can show the list before the next article is selected.
+		let keepReading = usesCompactLayout && singleColumnPane == .article
+
 		// Flush coalesced unread-count updates so folder counts are current.
 		CoalescingQueue.standard.performCallsImmediately()
 
@@ -458,14 +476,14 @@ final class MainWindowController: NSWindowController, NSUserInterfaceValidations
 
 		// TODO: handle search mode
 		if timelineViewController.canGoToNextUnread(wrappingToTop: false) {
-			goToNextUnreadInTimeline(wrappingToTop: false)
+			goToNextUnreadInTimeline(wrappingToTop: false, keepReading: keepReading)
 		} else if sidebarViewController.canGoToNextUnread(wrappingToTop: true) {
 			sidebarViewController.goToNextUnread(wrappingToTop: true)
 
 			// If we ended up on the same timelineViewController, we may need to wrap
 			// around to the top of its contents.
 			if timelineViewController.canGoToNextUnread(wrappingToTop: true) {
-				goToNextUnreadInTimeline(wrappingToTop: true)
+				goToNextUnreadInTimeline(wrappingToTop: true, keepReading: keepReading)
 			}
 		}
 	}
@@ -577,6 +595,10 @@ final class MainWindowController: NSWindowController, NSUserInterfaceValidations
 		} else {
 			detailViewController?.focus()
 		}
+	}
+
+	func toggleCompactModeArticle() {
+		showSingleColumnPane(singleColumnPane == .article ? .timeline : .article)
 	}
 
 	@IBAction func goToPreviousSubscription(_ sender: Any?) {
@@ -713,6 +735,7 @@ extension MainWindowController: SidebarDelegate {
 		if !representedObjectsAreTheSame {
 			timelineContainerViewController?.setRepresentedObjects(selectedObjects, mode: .regular)
 			forceSearchToEnd()
+			showSingleColumnPane(.timeline, focus: false)
 		}
 		updateWindowTitle()
 		NotificationCenter.default.post(name: .InspectableObjectsDidChange, object: nil)
@@ -765,6 +788,9 @@ extension MainWindowController: TimelineContainerViewControllerDelegate {
 		}
 
 		detailViewController?.setState(detailState, mode: mode)
+		if usesCompactLayout && singleColumnPane == .article && mode == timelineSourceMode && articles?.count != 1 {
+			showSingleColumnPane(.timeline, focus: false)
+		}
 		updateStatusBarLink()
 	}
 
@@ -832,7 +858,11 @@ extension MainWindowController: NSSearchFieldDelegate {
 	}
 
 	private func startSearchingIfNeeded() {
+		if usesCompactLayout && timelineSourceMode == .search {
+			return
+		}
 		timelineSourceMode = .search
+		showSingleColumnPane(.timeline, focus: false)
 		updateWindowTitle()
 	}
 
@@ -841,6 +871,7 @@ extension MainWindowController: NSSearchFieldDelegate {
 		lastSentSearchString = nil
 		timelineSourceMode = .regular
 		timelineContainerViewController?.setRepresentedObjects(nil, mode: .search)
+		showSingleColumnPane(.timeline, focus: false)
 		updateWindowTitle()
 	}
 }
@@ -1403,13 +1434,17 @@ private extension MainWindowController {
 
 		rememberCurrentLayoutGeometry()
 
+		// Search queries are temporary. Restore the regular list rather than the search reader.
+		let isSingleColumnSearch = usesCompactLayout && timelineSourceMode == .search
+		let paneToRestore = isSingleColumnSearch ? SingleColumnPane.timeline : singleColumnPane
 		return MainWindowState(isFullScreen: isFullScreen,
 							   splitViewWidths: rememberedStandardLayoutWidths,
 							   columnLayoutTimelineHeight: rememberedColumnLayoutTimelineHeight,
 							   isSidebarHidden: isSidebarHidden,
+							   singleColumnPane: usesCompactLayout ? paneToRestore : nil,
 							   sidebarWindowState: sidebarViewController?.windowState,
-							   timelineWindowState: timelineContainerViewController?.windowState,
-							   detailWindowState: detailViewController?.windowState)
+							   timelineWindowState: isSingleColumnSearch ? regularTimelineViewController?.windowState : timelineContainerViewController?.windowState,
+							   detailWindowState: isSingleColumnSearch ? nil : detailViewController?.windowState)
 	}
 
 	/// Reads the live split view positions into the remembered geometry for the current layout.
@@ -1504,8 +1539,16 @@ private extension MainWindowController {
 
 		sidebarViewController?.restoreState(from: state.sidebarWindowState)
 
+		let savedArticleScrollY = state.detailWindowState?.windowScrollY
+		if usesCompactLayout {
+			restoreArticleWindowScrollY = savedArticleScrollY
+		}
 		timelineContainerViewController?.restoreState(from: state.timelineWindowState)
-		restoreArticleWindowScrollY = state.detailWindowState?.windowScrollY
+		if usesCompactLayout {
+			restoreSingleColumnPane(state.singleColumnPane)
+		} else {
+			restoreArticleWindowScrollY = savedArticleScrollY
+		}
 
 		let isShowingExtractedArticle = state.detailWindowState?.isShowingExtractedArticle ?? false
 		if isShowingExtractedArticle {
@@ -1531,6 +1574,7 @@ private extension MainWindowController {
 		let articleWindowScrollY = state[UserInfoKey.articleWindowScrollY] as? CGFloat
 		restoreArticleWindowScrollY = articleWindowScrollY
 		timelineContainerViewController?.restoreLegacyState(from: state)
+		restoreSingleColumnPane(nil)
 
 		let isShowingExtractedArticle = state[UserInfoKey.isShowingExtractedArticle] as? Bool ?? false
 		if isShowingExtractedArticle {
@@ -1779,7 +1823,7 @@ private extension MainWindowController {
 
 	// MARK: - Misc.
 
-	func goToNextUnreadInTimeline(wrappingToTop wrapping: Bool) {
+	func goToNextUnreadInTimeline(wrappingToTop wrapping: Bool, keepReading: Bool) {
 
 		guard let timelineViewController = currentTimelineViewController else {
 			return
@@ -1787,7 +1831,11 @@ private extension MainWindowController {
 
 		if timelineViewController.canGoToNextUnread(wrappingToTop: wrapping) {
 			timelineViewController.goToNextUnread(wrappingToTop: wrapping)
-			makeTimelineViewFirstResponder()
+			if keepReading {
+				showSingleColumnPane(.article)
+			} else {
+				makeTimelineViewFirstResponder()
+			}
 		}
 	}
 
@@ -1850,6 +1898,14 @@ private extension MainWindowController {
 			extractor.process()
 			articleExtractor = extractor
 		}
+	}
+
+	func restoreSingleColumnPane(_ savedPane: SingleColumnPane?) {
+		guard usesCompactLayout else {
+			return
+		}
+		let pane = savedPane ?? defaultSingleColumnPane
+		showSingleColumnPane(pane == .article && oneSelectedArticle == nil ? .timeline : pane)
 	}
 
 	func restoreSplitViewState(from state: MainWindowState) {

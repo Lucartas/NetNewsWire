@@ -326,7 +326,8 @@ final class TimelineViewController: NSViewController, UndoableCommandRunner, Unr
 
 		updateEstimatedRowHeight()
 		tableView.target = self
-		tableView.doubleAction = #selector(openArticleInBrowser(_:))
+		tableView.action = #selector(clickedArticleRow(_:))
+		tableView.doubleAction = #selector(doubleClickedArticleRow(_:))
 		tableView.setDraggingSourceOperationMask(.copy, forLocal: false)
 		tableView.keyboardDelegate = keyboardDelegate
 		tableView.rowHeightDelegate = self
@@ -506,6 +507,24 @@ final class TimelineViewController: NSViewController, UndoableCommandRunner, Unr
 	}
 
 	// MARK: - Actions
+
+	@objc private func clickedArticleRow(_ sender: NSTableView) {
+		guard let controller = sender.window?.windowController as? MainWindowController,
+			  controller.usesCompactLayout,
+			  sender.clickedRow >= 0, sender.selectedRowIndexes.contains(sender.clickedRow),
+			  NSApp.currentEvent?.modifierFlags.intersection([.shift, .command, .control]).isEmpty == true else {
+			return
+		}
+		controller.navigateToDetail(sender)
+	}
+
+	@objc private func doubleClickedArticleRow(_ sender: NSTableView) {
+		if (sender.window?.windowController as? MainWindowController)?.usesCompactLayout == true {
+			clickedArticleRow(sender)
+		} else {
+			openArticleInBrowser(sender)
+		}
+	}
 
 	@objc func openArticleInBrowser(_ sender: Any?) {
 		let article: Article?
@@ -728,8 +747,8 @@ final class TimelineViewController: NSViewController, UndoableCommandRunner, Unr
 
 	// MARK: - Navigation
 
-	func goToDeepLink(for userInfo: [AnyHashable: Any]) {
-		guard let articleID = userInfo[ArticlePathKey.articleID] as? String else { return }
+	func goToDeepLink(for userInfo: [AnyHashable: Any]) -> Bool {
+		guard let articleID = userInfo[ArticlePathKey.articleID] as? String else { return false }
 
 		if isReadFiltered ?? false {
 			if let accountName = userInfo[ArticlePathKey.accountName] as? String,
@@ -739,11 +758,12 @@ final class TimelineViewController: NSViewController, UndoableCommandRunner, Unr
 			}
 		}
 
-		guard let ix = articles.firstIndex(where: { $0.articleID == articleID }) else {	return }
+		guard let ix = articles.firstIndex(where: { $0.articleID == articleID }) else { return false }
 
 		NSCursor.setHiddenUntilMouseMoves(true)
 		tableView.selectRow(ix)
 		tableView.scrollTo(row: ix)
+		return true
 	}
 
 	func goToNextUnread(wrappingToTop wrapping: Bool = false) {

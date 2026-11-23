@@ -17,15 +17,17 @@ final class MainWindowState: NSObject, NSSecureCoding {
 	// Timeline height in column layout. Zero when never saved.
 	let columnLayoutTimelineHeight: Int
 	let isSidebarHidden: Bool
+	let singleColumnPane: SingleColumnPane?
 	let sidebarWindowState: SidebarWindowState?
 	let timelineWindowState: TimelineWindowState?
 	let detailWindowState: DetailWindowState?
 
-	init(isFullScreen: Bool, splitViewWidths: [Int], columnLayoutTimelineHeight: Int = 0, isSidebarHidden: Bool, sidebarWindowState: SidebarWindowState? = nil, timelineWindowState: TimelineWindowState? = nil, detailWindowState: DetailWindowState? = nil) {
+	init(isFullScreen: Bool, splitViewWidths: [Int], columnLayoutTimelineHeight: Int = 0, isSidebarHidden: Bool, singleColumnPane: SingleColumnPane? = nil, sidebarWindowState: SidebarWindowState? = nil, timelineWindowState: TimelineWindowState? = nil, detailWindowState: DetailWindowState? = nil) {
 		self.isFullScreen = isFullScreen
 		self.splitViewWidths = splitViewWidths
 		self.columnLayoutTimelineHeight = columnLayoutTimelineHeight
 		self.isSidebarHidden = isSidebarHidden
+		self.singleColumnPane = singleColumnPane
 		self.sidebarWindowState = sidebarWindowState
 		self.timelineWindowState = timelineWindowState
 		self.detailWindowState = detailWindowState
@@ -36,6 +38,7 @@ final class MainWindowState: NSObject, NSSecureCoding {
 		static let splitViewWidths = "splitViewWidths"
 		static let columnLayoutTimelineHeight = "columnLayoutTimelineHeight"
 		static let isSidebarHidden = "isSidebarHidden"
+		static let singleColumnPane = "singleColumnPane"
 		static let sidebarWindowState = "sidebarWindowState"
 		static let timelineWindowState = "timelineWindowState"
 		static let detailWindowState = "detailWindowState"
@@ -46,6 +49,7 @@ final class MainWindowState: NSObject, NSSecureCoding {
 		splitViewWidths = coder.decodeObject(of: [NSArray.self, NSNumber.self], forKey: Key.splitViewWidths) as? [Int] ?? []
 		columnLayoutTimelineHeight = coder.decodeInteger(forKey: Key.columnLayoutTimelineHeight)
 		isSidebarHidden = coder.decodeBool(forKey: Key.isSidebarHidden)
+		singleColumnPane = SingleColumnPane(rawValue: coder.decodeInteger(forKey: Key.singleColumnPane))
 		sidebarWindowState = coder.decodeObject(of: SidebarWindowState.self, forKey: Key.sidebarWindowState)
 		timelineWindowState = coder.decodeObject(of: TimelineWindowState.self, forKey: Key.timelineWindowState)
 		detailWindowState = coder.decodeObject(of: DetailWindowState.self, forKey: Key.detailWindowState)
@@ -56,6 +60,9 @@ final class MainWindowState: NSObject, NSSecureCoding {
 		coder.encode(splitViewWidths, forKey: Key.splitViewWidths)
 		coder.encode(columnLayoutTimelineHeight, forKey: Key.columnLayoutTimelineHeight)
 		coder.encode(isSidebarHidden, forKey: Key.isSidebarHidden)
+		if let singleColumnPane {
+			coder.encode(singleColumnPane.rawValue, forKey: Key.singleColumnPane)
+		}
 		coder.encode(sidebarWindowState, forKey: Key.sidebarWindowState)
 		coder.encode(timelineWindowState, forKey: Key.timelineWindowState)
 		coder.encode(detailWindowState, forKey: Key.detailWindowState)
